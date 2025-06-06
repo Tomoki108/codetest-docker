@@ -62,6 +62,7 @@ func main() {
 	}
 }
 
+// createTransaction 取引データを登録する
 func createTransaction(ctx context.Context, userID int, amount int, description string) (err error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -93,7 +94,7 @@ func createTransaction(ctx context.Context, userID int, amount int, description 
 	// 累計取引額チェック
 	newTotal := currentTotal + amount
 	if newTotal > totalAmountLimit {
-		return fmt.Errorf("%w: 現在 %d, 新しい %d", errTotalAmountLimitExceeded, currentTotal, newTotal)
+		return errTotalAmountLimitExceeded
 	}
 
 	// ユーザーの累計取引額を更新
