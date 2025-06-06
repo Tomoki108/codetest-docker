@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"io"
+	"errors"
 	"log"
 	"net/http"
 )
@@ -26,10 +26,16 @@ func main() {
 			return
 		}
 
-		if _, err := io.Copy(w, r.Body); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		err := createTransaction(r.Context(), req.UserID, req.Amount, req.Description)
+		if errors.Is(err, errTotalAmountLimitExceeded) {
+			http.Error(w, err.Error(), http.StatusPaymentRequired)
+		} else if err != nil {
+			http.Error(w, "Internal server error: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
+		w.WriteHeader(http.StatusCreated)
 	})
+
 	if err := http.ListenAndServe(":8888", nil); err != nil {
 		log.Println(err)
 	}
