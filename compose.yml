@@ -12,6 +12,8 @@ services:
 
   app:
     build:
-      context: app
+      # NOTE: go.mod, go.sumをコンテナにCOPYするため、contextをappから.に設定
+      context: .
+      dockerfile: app/Dockerfile
     ports:
       - 8888:8888
