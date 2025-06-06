@@ -21,7 +21,8 @@ var db *sql.DB
 
 func init() {
 	var err error
-	db, err = sql.Open("mysql", "root@tcp(127.0.0.1)/codetest")
+	// Docker Compose network: connect to db service by hostname
+	db, err = sql.Open("mysql", "root@tcp(db:3306)/codetest")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -62,9 +63,7 @@ func main() {
 }
 
 func createTransaction(ctx context.Context, userID int, amount int, description string) (err error) {
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelSerializable, // 競合をより厳格に防ぎたいなら Serializable。MySQL の場合、デフォルトで REPEATABLE READ。
-	})
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("トランザクション開始失敗: %w", err)
 	}
@@ -80,7 +79,7 @@ func createTransaction(ctx context.Context, userID int, amount int, description 
 
 	// ユーザーの累計取引額を取得
 	var currentTotal int
-	getUserQuery := `SELECT total_amount FROM users WHERE user_id = ? FOR UPDATE`
+	getUserQuery := `SELECT total_amount FROM users WHERE id = ? FOR UPDATE`
 	row := tx.QueryRowContext(ctx, getUserQuery, userID)
 	if scanErr := row.Scan(&currentTotal); scanErr != nil {
 		if errors.Is(scanErr, sql.ErrNoRows) {
@@ -98,7 +97,7 @@ func createTransaction(ctx context.Context, userID int, amount int, description 
 	}
 
 	// ユーザーの累計取引額を更新
-	updateUserQuery := `UPDATE users SET total_amount = ? WHERE user_id = ?`
+	updateUserQuery := `UPDATE users SET total_amount = ? WHERE id = ?`
 	if _, execErr := tx.ExecContext(ctx, updateUserQuery, newTotal, userID); execErr != nil {
 		err = fmt.Errorf("users テーブル更新エラー: %w", execErr)
 		return err
@@ -106,8 +105,8 @@ func createTransaction(ctx context.Context, userID int, amount int, description 
 
 	// transactions テーブルに新しい取引を挿入
 	insertTransactionQuery := `
-        INSERT INTO transactions (user_id, amount, description)
-        VALUES (?, ?, ?)`
+		INSERT INTO transactions (user_id, amount, description)
+		VALUES (?, ?, ?)`
 	if _, execErr := tx.ExecContext(ctx, insertTransactionQuery, userID, amount, description); execErr != nil {
 		err = fmt.Errorf("transactions 挿入エラー: %w", execErr)
 		return err
